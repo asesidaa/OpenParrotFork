@@ -1,9 +1,11 @@
-﻿#include <StdInc.h>
+// ReSharper disable CppClangTidyClangDiagnosticMicrosoftCast
+#include <StdInc.h>
 
 // ORIGINALL BASED ON ttx_monitor, modified for RFID. https://github.com/zxmarcos/ttx_monitor
 
 #include "Utility/InitFunction.h"
 #include <queue>
+#include <atomic>
 #include "Utility/GameDetect.h"
 
 using namespace std::string_literals;
@@ -243,10 +245,14 @@ int handleReadGeneralPurposeInput(jprot_encoder *r, DWORD arg1)
 	r->report(JVS_REPORT_OK);
 	for(DWORD i = 0; i < arg1; i++)
 	{
-		if (cardInserted)
+		if ( cardInserted)
+		{
 			r->push(0x19); // This should be only injected with first package of the 3, but does not seem to care.
+		}
 		else
+		{
 			r->push(0);
+		}
 	}
 	return 2 + arg1;
 }
@@ -254,7 +260,7 @@ int handleReadGeneralPurposeInput(jprot_encoder *r, DWORD arg1)
 // Dumped from my own Japanese Lord Vermilion Nesica XLive card -Reaver
 static char cardData[0x18] = { 0x04, 0xC2, 0x3D, 0xDA, 0x6F, 0x52, 0x80, 0x00, 0x37, 0x30, 0x32, 0x30, 0x33, 0x39, 0x32, 0x30, 0x31, 0x30, 0x32, 0x38, 0x31, 0x35, 0x30, 0x32 };
 
-
+static std::atomic writeCount = 0;
 // 0x32 -- read general-purpose output. This is very confusing 0x32 0x01 0x00 returns 0x01 (0x18 times 0x00) 0x01
 // See JVSP manual for more information.
 int handleReadGeneralPurposeOutput(jprot_encoder *r, DWORD arg1)
@@ -263,8 +269,10 @@ int handleReadGeneralPurposeOutput(jprot_encoder *r, DWORD arg1)
 	//OutputDebugStringA("Requested card data!");
 #endif
 	r->report(JVS_REPORT_OK);
-	if(cardInserted)
+	if(cardInserted && writeCount == 0)
 	{
+		info(true, "Writing card data...\n");
+		++writeCount;
 		for(int i = 0; i < 0x18; i++)
 		{
 			r->push(cardData[i]);
@@ -1073,13 +1081,15 @@ static DWORD WINAPI InsertCardThread(LPVOID)
 		{
 			if (!keyDown)
 			{
-				cardInserted = !cardInserted;
+				cardInserted = true;
 				keyDown = true;
 			}
 		}
 		else
 		{
 			keyDown = false;
+			cardInserted = false;
+			writeCount = 0;
 		}
 		Sleep(100);
 	}
@@ -1090,34 +1100,34 @@ void init_RfidEmu()
 {
 	MH_Initialize();
 	CreateDirectoryA("OpenParrot", nullptr);
-	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileA", FindFirstFileAWrap, (void**)&g_origFindFirstFileA);
-	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileW", FindFirstFileWWrap, (void**)&g_origFindFirstFileW);
-	MH_CreateHookApi(L"kernel32.dll", "CreateDirectoryA", CreateDirectoryAWrap, (void**)&g_origCreateDirectoryA);
-	MH_CreateHookApi(L"kernel32.dll", "CreateDirectoryW", CreateDirectoryWWrap, (void**)&g_origCreateDirectoryW);
-	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesA", GetFileAttributesAWrap, (void**)&g_origGetFileAttributesA);
-	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesW", GetFileAttributesWWrap, (void**)&g_origGetFileAttributesW);
-	MH_CreateHookApi(L"kernel32.dll", "CreateFileW", CreateFileWWrap, (void**)&g_origCreateFileW);
-	MH_CreateHookApi(L"kernel32.dll", "CreateFileA", CreateFileAWrap, (void**)&g_origCreateFileA);
-	MH_CreateHookApi(L"kernel32.dll", "WriteFile", WriteFileWrap, (void**)&g_origWriteFile);
-	MH_CreateHookApi(L"kernel32.dll", "ReadFile", ReadFileWrap, (void**)&g_origReadFile);
-	MH_CreateHookApi(L"kernel32.dll", "CloseHandle", CloseHandleWrap, (void**)&g_origCloseHandle);
-	MH_CreateHookApi(L"kernel32.dll", "GetCommModemStatus", GetCommModemStatusWrap, (void**)&g_origGetCommModemStatus);
-	MH_CreateHookApi(L"kernel32.dll", "EscapeCommFunction", EscapeCommFunctionWrap, (void**)&g_origEscapeCommFunction);
-	MH_CreateHookApi(L"kernel32.dll", "ClearCommError", ClearCommErrorWrap, (void**)&g_origClearCommError);
-	MH_CreateHookApi(L"kernel32.dll", "SetCommMask", SetCommMaskWrap, (void**)&g_origSetCommMask);
-	MH_CreateHookApi(L"kernel32.dll", "SetupComm", SetupCommWrap, (void**)&g_origSetupComm);
-	MH_CreateHookApi(L"kernel32.dll", "GetCommState", GetCommStateWrap, (void**)&g_origGetCommState);
-	MH_CreateHookApi(L"kernel32.dll", "SetCommState", SetCommStateWrap, (void**)&g_origSetCommState);
-	MH_CreateHookApi(L"kernel32.dll", "SetCommTimeouts", SetCommTimeoutsWrap, (void**)&g_origSetCommTimeouts);
-	MH_CreateHookApi(L"kernel32.dll", "GetCommTimeouts", GetCommTimeoutsWrap, (void**)&g_origGetCommTimeouts);
-	MH_CreateHookApi(L"kernel32.dll", "GetDiskFreeSpaceExA", GetDiskFreeSpaceExAWrap, (void**)&g_origGetDiskFreeSpaceExA);
-	MH_CreateHookApi(L"kernel32.dll", "GetDiskFreeSpaceExW", GetDiskFreeSpaceExWWrap, (void**)&g_origGetDiskFreeSpaceExW);
-	MH_CreateHookApi(L"kernel32.dll", "DeleteFileA", DeleteFileAWrap, (void**)&g_origDeleteFileA);
-	MH_CreateHookApi(L"kernel32.dll", "DeleteFileW", DeleteFileWWrap, (void**)&g_origDeleteFileW);
-	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileExA", FindFirstFileExAWrap, (void**)&g_origFindFirstFileExA);
-	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileExW", FindFirstFileExWWrap, (void**)&g_origFindFirstFileExW);
-	MH_CreateHookApi(L"kernel32.dll", "SetCurrentDirectoryA", SetCurrentDirectoryAWrap, (void**)&g_origSetCurrentDirectoryA);
-	MH_EnableHook(MH_ALL_HOOKS);
+	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileA", FindFirstFileAWrap, reinterpret_cast<void**>(&g_origFindFirstFileA));
+	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileW", FindFirstFileWWrap, reinterpret_cast<void**>(&g_origFindFirstFileW));
+	MH_CreateHookApi(L"kernel32.dll", "CreateDirectoryA", CreateDirectoryAWrap, reinterpret_cast<void**>(&g_origCreateDirectoryA));
+	MH_CreateHookApi(L"kernel32.dll", "CreateDirectoryW", CreateDirectoryWWrap, reinterpret_cast<void**>(&g_origCreateDirectoryW));
+	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesA", GetFileAttributesAWrap, reinterpret_cast<void**>(&g_origGetFileAttributesA));
+	MH_CreateHookApi(L"kernel32.dll", "GetFileAttributesW", GetFileAttributesWWrap, reinterpret_cast<void**>(&g_origGetFileAttributesW));
+	MH_CreateHookApi(L"kernel32.dll", "CreateFileW", CreateFileWWrap, reinterpret_cast<void**>(&g_origCreateFileW));
+	MH_CreateHookApi(L"kernel32.dll", "CreateFileA", CreateFileAWrap, reinterpret_cast<void**>(&g_origCreateFileA));
+	MH_CreateHookApi(L"kernel32.dll", "WriteFile", WriteFileWrap, reinterpret_cast<void**>(&g_origWriteFile));
+	MH_CreateHookApi(L"kernel32.dll", "ReadFile", ReadFileWrap, reinterpret_cast<void**>(&g_origReadFile));
+	MH_CreateHookApi(L"kernel32.dll", "CloseHandle", CloseHandleWrap, reinterpret_cast<void**>(&g_origCloseHandle));
+	MH_CreateHookApi(L"kernel32.dll", "GetCommModemStatus", GetCommModemStatusWrap, reinterpret_cast<void**>(&g_origGetCommModemStatus));
+	MH_CreateHookApi(L"kernel32.dll", "EscapeCommFunction", EscapeCommFunctionWrap, reinterpret_cast<void**>(&g_origEscapeCommFunction));
+	MH_CreateHookApi(L"kernel32.dll", "ClearCommError", ClearCommErrorWrap, reinterpret_cast<void**>(&g_origClearCommError));
+	MH_CreateHookApi(L"kernel32.dll", "SetCommMask", SetCommMaskWrap, reinterpret_cast<void**>(&g_origSetCommMask));
+	MH_CreateHookApi(L"kernel32.dll", "SetupComm", SetupCommWrap, reinterpret_cast<void**>(&g_origSetupComm));
+	MH_CreateHookApi(L"kernel32.dll", "GetCommState", GetCommStateWrap, reinterpret_cast<void**>(&g_origGetCommState));
+	MH_CreateHookApi(L"kernel32.dll", "SetCommState", SetCommStateWrap, reinterpret_cast<void**>(&g_origSetCommState));
+	MH_CreateHookApi(L"kernel32.dll", "SetCommTimeouts", SetCommTimeoutsWrap, reinterpret_cast<void**>(&g_origSetCommTimeouts));
+	MH_CreateHookApi(L"kernel32.dll", "GetCommTimeouts", GetCommTimeoutsWrap, reinterpret_cast<void**>(&g_origGetCommTimeouts));
+	MH_CreateHookApi(L"kernel32.dll", "GetDiskFreeSpaceExA", GetDiskFreeSpaceExAWrap, reinterpret_cast<void**>(&g_origGetDiskFreeSpaceExA));
+	MH_CreateHookApi(L"kernel32.dll", "GetDiskFreeSpaceExW", GetDiskFreeSpaceExWWrap, reinterpret_cast<void**>(&g_origGetDiskFreeSpaceExW));
+	MH_CreateHookApi(L"kernel32.dll", "DeleteFileA", DeleteFileAWrap, reinterpret_cast<void**>(&g_origDeleteFileA));
+	MH_CreateHookApi(L"kernel32.dll", "DeleteFileW", DeleteFileWWrap, reinterpret_cast<void**>(&g_origDeleteFileW));
+	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileExA", FindFirstFileExAWrap, reinterpret_cast<void**>(&g_origFindFirstFileExA));
+	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileExW", FindFirstFileExWWrap, reinterpret_cast<void**>(&g_origFindFirstFileExW));
+	MH_CreateHookApi(L"kernel32.dll", "SetCurrentDirectoryA", SetCurrentDirectoryAWrap, reinterpret_cast<void**>(&g_origSetCurrentDirectoryA));
+	MH_EnableHook(nullptr);
 
-	CreateThread(0, 0, InsertCardThread, 0, 0, 0);
+	CreateThread(nullptr, 0, InsertCardThread, nullptr, 0, nullptr);
 }

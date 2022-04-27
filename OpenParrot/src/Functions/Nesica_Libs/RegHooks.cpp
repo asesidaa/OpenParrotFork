@@ -328,7 +328,7 @@ LSTATUS __stdcall RegQueryValueExAWrap(
 		}
 		else if (stricmp(lpValueName, "Country") == 0) // REG_DWORD
 		{
-			*(DWORD*)lpData = FillDwordInformation("TYPEX", "Country", 1); // UNK
+			*(DWORD*)lpData = FillDwordInformation("TYPEX", "Country", 0); // UNK
 			*lpcbData = 1;
 		}
 		else

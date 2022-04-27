@@ -60,7 +60,7 @@ NesysEmu::NesysEmu()
                     char server[];
                   };
 
-                  const char* wat = "card_id=7020392010281502";
+                  const char* wat = "card_id=7020392000147361";
 
                   nesys_cert_init_response* response = (nesys_cert_init_response*)malloc(sizeof(nesys_cert_init_response) + strlen(wat));
                   response->tenpo.tenpo_id = 1337;
@@ -119,12 +119,16 @@ NesysEmu::NesysEmu()
 			char cardId[16];
 			unsigned int dataType;
 			unsigned int paramSize;
-			char param[1];
+			char param[];
 		};
 
 		const _CARD_GETDATA* card = reinterpret_cast<const _CARD_GETDATA*>(dataa);
+		info(true, "Card data: cardId: %s, dataType: %04x, paramSize: %d, param: %s\n", 
+			card->cardId, card->dataType, card->paramSize, card->param);
 
-		FILE* f = fopen(va("card_%.16s_%d.bin", card->cardId, card->dataType), "rb");
+		char* name = R"(card.xml)";
+		FILE* f = fopen(name, "rb");
+
 
 		size_t dataSize = 16384;
 		char data[16384];
@@ -132,6 +136,7 @@ NesysEmu::NesysEmu()
 
 		if (f)
 		{
+			info(true, "File %s read successfully\n", name);
 			dataSize = fread(data, 1, 16384, f);
 			fclose(f);
 
@@ -155,8 +160,9 @@ NesysEmu::NesysEmu()
 		s->days = 100;
 		s->size = dataSize;
 		memcpy(s->data, data, s->size);
-		if(GameDetect::currentGame != GameID::CrimzonClover) // if someone fixes card code, remove this
-		SendResponse(SCOMMAND_CARD_SELECT_REPLY, s, sizeof(cardstatus) + dataSize);
+		if (GameDetect::currentGame != GameID::CrimzonClover) { // if someone fixes card code, remove this
+			SendResponse(SCOMMAND_CARD_SELECT_REPLY, s, sizeof(cardstatus) + dataSize);
+		}
 	};
 
 	struct __declspec(align(4)) _CARD_SENDDATA
@@ -195,12 +201,17 @@ NesysEmu::NesysEmu()
 	{
 		const _CARD_SENDDATA* card = reinterpret_cast<const _CARD_SENDDATA*>(data);
 
-		FILE* f = fopen(va("card_%s_%d.bin", card->cardId, card->dataType), "wb");
+		/*FILE* f = fopen("card.xml", "wb");
+
 		if (f)
 		{
 			fwrite(card->data, 1, card->dataSize, f);
 			fclose(f);
-		}
+		}*/
+
+		info(true, "Card update request received.\n");
+		info(true, "CardID:%s\nFrequency: %d \nTransferMode: %04x\nDataType: %04x\nDataSize: %d\nData: %s\n",
+			card->cardId, card->frequency, card->transferMode, card->dataType, card->dataSize, card->data);
 
 		struct cardstatus
 		{
@@ -251,6 +262,25 @@ NesysEmu::NesysEmu()
 
 	m_commandHandlers[LCOMMAND_RANKING_DATA_REQUEST] = [=](const uint8_t* dataa, size_t length)
 	{
+		info(true, "Getting rank data...");
+
+		FILE* f = fopen(va("rank.xml"), "rb");
+
+		size_t dataSize = 16384;
+		char data[16384];
+		memset(data, 0x0, 0x4000);
+
+		if (f)
+		{
+			info(true, "File read successfully\n");
+			dataSize = fread(data, 1, 16384, f);
+			fclose(f);
+
+			data[dataSize] = '\0';
+
+			++dataSize;
+		}
+
 		struct ranking
 		{
 			uint32_t status;
@@ -258,11 +288,12 @@ NesysEmu::NesysEmu()
 			char data[];
 		};
 
-		ranking r;
-		r.status = 1;
-		r.size = 0;
+		ranking* r = static_cast<ranking*>(malloc(sizeof(ranking) + dataSize));
+		r->status = 1;
+		r->size = dataSize;
+		memcpy(r->data, data, r->size);
+		SendResponse(SCOMMAND_RANKING_DATA_REPLY, r, sizeof(ranking) + dataSize);
 
-		SendResponse(SCOMMAND_RANKING_DATA_REPLY, &r);
 	};
 
 	m_commandHandlers[LCOMMAND_UPLOAD_CONFIG_REQUEST] = [=](const uint8_t* data, size_t length)
@@ -380,12 +411,19 @@ NesysEmu::NesysEmu()
 		nesys_laninterface_table_t lan;
 		lan.interfaceStatus = 1;
 		
-		lan.interfaceData.Dhcp_Enabled = strcmp(config["Network"]["Dhcp"].c_str(), "1") == 0;
+		/*lan.interfaceData.Dhcp_Enabled = strcmp(config["Network"]["Dhcp"].c_str(), "1") == 0;
 		strcpy(lan.interfaceData.ipAddr, config["Network"]["Ip"].c_str());
 		strcpy(lan.interfaceData.submask, config["Network"]["Mask"].c_str());
 		strcpy(lan.interfaceData.gateway, config["Network"]["Gateway"].c_str());
 		strcpy(lan.interfaceData.dhcpServers, config["Network"]["Dns1"].c_str());
-		strcpy(lan.interfaceData.dnsServers, config["Network"]["Dns1"].c_str());
+		strcpy(lan.interfaceData.dnsServers, config["Network"]["Dns1"].c_str());*/
+
+		lan.interfaceData.Dhcp_Enabled = 0;
+		strcpy(lan.interfaceData.ipAddr, "10.19.72.218");
+		strcpy(lan.interfaceData.submask, "255.255.252.0");
+		strcpy(lan.interfaceData.gateway, "10.19.72.1");
+		strcpy(lan.interfaceData.dhcpServers, config["Network"]["Dns1"].c_str());
+		strcpy(lan.interfaceData.dnsServers, "10.15.44.11");
 		strcpy(lan.interfaceData.macAddress, "DEADBABECAFE");
 
 		SendResponse(SCOMMAND_ADAPTER_INFO_REPLY, &lan);
@@ -432,7 +470,9 @@ void NesysEmu::ProcessRequestInternal(const NesysCommandHeader* header)
 	}
 
 #ifdef _DEBUG
-	info(true, "got unhandled nesys command: %d\n", header->command); //
+	info(true, "got unhandled nesys command: %d\n", header->command);//
+	info(true, "Data is %s, length %d\n", 
+		std::string(reinterpret_cast<const char*>(header->data), header->length), header->length);
 #endif
 }
 

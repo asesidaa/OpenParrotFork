@@ -78,7 +78,7 @@ int __cdecl iDmacDrvRegisterRead(int DeviceId, DWORD CommandCode, LPVOID OutBuff
 		}
 		break;
 	case 0x4128: // Analogs 2
-		if (GameDetect::currentGame == GameID::GrooveCoaster2)
+		if (GameDetect::currentGame == GameID::GrooveCoaster2 || GameDetect::currentGame == GameID::GrooveCoaster4EX)
 		{
 			result = 0xFF;
 		}

@@ -20,6 +20,9 @@ void GameDetect::DetectCurrentGame()
 	// TODO: move all game detection bound to crcResult immediately below to use the newCrcResult switch at end with its new CRC instead.
 	uint32_t crcResult = GetCRC32(GetModuleHandle(nullptr), 0x400);
 	NesicaKey = NesicaKey::None;
+	/*info(true, "---------------------------------");
+	info(true, "CRC: %08x detected", crcResult);
+	info(true, "---------------------------------");*/
 	switch (crcResult)
 	{
 #if _M_IX86
@@ -28,6 +31,14 @@ void GameDetect::DetectCurrentGame()
 		break;
 	case 0x4bcfbc4f:
 		currentGame = GameID::GrooveCoaster2;
+		isNesica = true;
+		break;
+	case 0x9a4346a9:
+		currentGame = GameID::GrooveCoaster4EX;
+		isNesica = true;
+		break;
+	case 0xb18243bc:
+		currentGame = GameID::GrooveCoaster4MAX;
 		isNesica = true;
 		break;
 	case 0xcb4ab9d6:

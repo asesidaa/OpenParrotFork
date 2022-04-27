@@ -45,6 +45,8 @@ enum class GameID
 	PokkenTournament26,
 	ExBoardGeneric,
 	GrooveCoaster2,
+	GrooveCoaster4EX,
+	GrooveCoaster4MAX,
 	PuzzleBobble,
 	WMMT5,
 	MagicalBeat,
