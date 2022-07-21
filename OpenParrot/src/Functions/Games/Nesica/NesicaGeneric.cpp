@@ -148,17 +148,8 @@ static InitFunction initFunction_GC4MAX([]()
 		uintptr_t imageBase = (uintptr_t)GetModuleHandleA(0);
 		//init_FastIoEmu();
 		init_RfidEmu();
-		init_RegHooks();
+		//init_RegHooks();
 		//init_NesysEmu();
-
-		// Ignore stupid OutputDebugStringA Scheluder crap
-		//injector::MakeNOP(imageBase + 0x2008CC, 7);
-
-		// Unstuck the game from some dumb mouse scanner func
-		//injector::MakeNOP(imageBase + 0xA3FF6, 2);
-
-		// Patch dongle spam on RFID port
-		//injector::MakeNOP(imageBase + 0xF90F6, 5);
 
 #if _M_IX86
 		init_CryptoPipe(GameDetect::NesicaKey);

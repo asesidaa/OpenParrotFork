@@ -20,9 +20,9 @@ void GameDetect::DetectCurrentGame()
 	// TODO: move all game detection bound to crcResult immediately below to use the newCrcResult switch at end with its new CRC instead.
 	uint32_t crcResult = GetCRC32(GetModuleHandle(nullptr), 0x400);
 	NesicaKey = NesicaKey::None;
-	/*info(true, "---------------------------------");
+	info(true, "---------------------------------");
 	info(true, "CRC: %08x detected", crcResult);
-	info(true, "---------------------------------");*/
+	info(true, "---------------------------------");
 	switch (crcResult)
 	{
 #if _M_IX86

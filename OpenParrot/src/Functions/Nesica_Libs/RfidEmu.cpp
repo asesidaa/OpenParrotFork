@@ -6,6 +6,9 @@
 #include "Utility/InitFunction.h"
 #include <queue>
 #include <atomic>
+#include <array>
+#include <ShlObj.h>
+#include <filesystem>
 #include "Utility/GameDetect.h"
 
 using namespace std::string_literals;
@@ -258,7 +261,8 @@ int handleReadGeneralPurposeInput(jprot_encoder *r, DWORD arg1)
 }
 
 // Dumped from my own Japanese Lord Vermilion Nesica XLive card -Reaver
-static char cardData[0x18] = { 0x04, 0xC2, 0x3D, 0xDA, 0x6F, 0x52, 0x80, 0x00, 0x37, 0x30, 0x32, 0x30, 0x33, 0x39, 0x32, 0x30, 0x31, 0x30, 0x32, 0x38, 0x31, 0x35, 0x30, 0x32 };
+static std::array<BYTE, 0x18> cardData= { 0x04, 0xC2, 0x3D, 0xDA, 0x6F, 0x52, 0x80, 0x00, 0x37, 0x30, 0x32, 0x30, 0x33, 0x39, 0x32, 0x30, 0x31, 0x30, 0x32, 0x38, 0x31, 0x35, 0x30, 0x32 };
+// static char cardData[0x18] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x37, 0x30, 0x32, 0x30, 0x33, 0x39, 0x32, 0x30, 0x31, 0x30, 0x32, 0x38, 0x31, 0x35, 0x30, 0x32 };
 
 static std::atomic writeCount = 0;
 // 0x32 -- read general-purpose output. This is very confusing 0x32 0x01 0x00 returns 0x01 (0x18 times 0x00) 0x01
@@ -1099,6 +1103,35 @@ static DWORD WINAPI InsertCardThread(LPVOID)
 void init_RfidEmu()
 {
 	MH_Initialize();
+	linb::ini card;
+	PWSTR path_tmp;
+
+	/* Attempt to get user's AppData folder
+	 *
+	 * Microsoft Docs:
+	 * https://docs.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shgetknownfolderpath
+	 * https://docs.microsoft.com/en-us/windows/win32/shell/knownfolderid
+	 */
+	const auto get_folder_path_ret = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &path_tmp);
+
+	/* Error check */
+	if (get_folder_path_ret == S_OK) {
+		std::filesystem::path path = path_tmp;
+		path /= "card.ini";
+		
+		if (card.read_file(path.string().c_str()))
+		{
+			cardData[23] = '3';
+			if (const auto cardId = card.get("", "CardId", "7020392010281502"); cardId.length() == 16)
+			{
+				for (int i = 0; i < 16; ++i)
+				{
+					cardData[i + 8] = cardId[i];
+				}
+			}
+		}
+	}
+	CoTaskMemFree(path_tmp);
 	CreateDirectoryA("OpenParrot", nullptr);
 	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileA", FindFirstFileAWrap, reinterpret_cast<void**>(&g_origFindFirstFileA));
 	MH_CreateHookApi(L"kernel32.dll", "FindFirstFileW", FindFirstFileWWrap, reinterpret_cast<void**>(&g_origFindFirstFileW));
