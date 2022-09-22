@@ -6,6 +6,25 @@
 
 #ifdef _M_AMD64
 
+#define HOOK_DYNAMIC(returnType, callingConvention, functionName, ...)                                                                               \
+typedef returnType callingConvention (*functionName) (__VA_ARGS__);                                                                              \
+functionName original##functionName = NULL;                                                                                                      \
+void *where##functionName           = NULL;                                                                                                      \
+returnType callingConvention implOf##functionName (__VA_ARGS__)
+
+#define INSTALL_HOOK(functionName)                                                                                                                   \
+{                                                                                                                                                \
+MH_Initialize ();                                                                                                                            \
+MH_CreateHook ((void *)where##functionName, (void *)implOf##functionName, (void **)(&original##functionName));                               \
+MH_EnableHook ((void *)where##functionName);                                                                                                 \
+}
+
+#define INSTALL_HOOK_DYNAMIC(functionName, location)                                                                                                 \
+{                                                                                                                                                \
+where##functionName = (void *)location;                                                                                                      \
+INSTALL_HOOK (functionName);                                                                                                                 \
+}
+
 static bool btnTestToggle = false;
 static bool btnTestLast = false;
 static bool btnCoinLast = false;
@@ -191,7 +210,7 @@ static uint16_t __fastcall bnusio_GetAnalogIn(unsigned __int8 a1)
 static void* __fastcall bnusio_GetBuffer(unsigned __int16 a1, __int64 a2, __int16 a3)
 {
 	//info(true, "bnusio_GetBuffer");
-	return 0;
+	return nullptr;
 }
 
 static __int64 __fastcall bnusio_GetCDOut(unsigned __int8 a1)
@@ -209,7 +228,7 @@ static uint16_t __fastcall bnusio_GetCoin(int player)
 static void* __fastcall bnusio_GetCoinError(int player)
 {
 	//info(true, "bnusio_GetCoinError player: %d", player);
-	return 0;
+	return nullptr;
 }
 
 static __int64 __fastcall bnusio_GetCoinLock(unsigned __int8 a1)
@@ -227,7 +246,7 @@ static unsigned __int64 bnusio_GetEncoder()
 static void* bnusio_GetExpansionMode()
 {
 	//info(true, "bnusio_GetExpansionMode");
-	return 0;
+	return nullptr;
 }
 
 static void* bnusio_GetFirmwareVersion()
@@ -251,7 +270,7 @@ static __int64 __fastcall bnusio_GetHopOut(unsigned __int8 a1)
 static void* bnusio_GetIoBoardName()
 {
 	//info(true, "bnusio_GetIoBoardName");
-	return 0;
+	return nullptr;
 }
 
 static __int64 __fastcall bnusio_GetRegisterU16(__int16 a1)
@@ -269,25 +288,25 @@ static char __fastcall bnusio_GetRegisterU8(unsigned __int16 a1)
 static void* __fastcall bnusio_GetService(int a1)
 {
 	//info(true, "bnusio_GetService");
-	return 0;
+	return nullptr;
 }
 
 static void* __fastcall bnusio_GetServiceError(int a1)
 {
 	//info(true, "bnusio_GetServiceError");
-	return 0;
+	return nullptr;
 }
 
 static void* __fastcall bnusio_GetStatusU16(unsigned __int16 a1)
 {
 	//info(true, "bnusio_GetStatusU16");
-	return 0;
+	return nullptr;
 }
 
 static void* __fastcall bnusio_GetStatusU8(unsigned __int16 a1)
 {
 	//info(true, "bnusio_GetStatusU8");
-	return 0;
+	return nullptr;
 }
 
 static uint32_t bnusio_GetSwIn()
@@ -332,7 +351,7 @@ static uint64_t bnusio_GetSwIn64()
 static void* bnusio_GetSystemError()
 {
 	//info(true, "bnusio_GetSystemError");
-	return 0;
+	return nullptr;
 }
 
 static char bnusio_IsConnected()
@@ -416,7 +435,7 @@ static __int64 __fastcall bnusio_SetHopperRequest(unsigned __int16 a1, __int16 a
 static void* __fastcall bnusio_SetPLCounter(__int16 a1)
 {
 	//info(true, "bnusio_SetPLCounter a1: %d", a1);
-	return 0;
+	return nullptr;
 }
 
 static __int64 __fastcall bnusio_SetRegisterU16(unsigned __int16 a1, __int16 a2)
@@ -463,8 +482,12 @@ static __int64 nbamUsbFinderRelease()
 
 static __int64 __fastcall nbamUsbFinderGetSerialNumber(int a1, __int64 a2)
 {
-	//info(true, "nbamUsbFinderGetSerialNumber a1: %u a2: %p", a1, a2);
-	return 1;
+	info(true, "nbamUsbFinderGetSerialNumber a1: %u a2: %p", a1, a2);
+	auto result = reinterpret_cast<char*>(a2);
+	strcpy_s((char*)a2, 13, "284111080001");
+	result[12] = '\0';
+	info(true, "%s", a2);
+	return 0;
 }
 
 // XInputs hooks to disable built in XInput screwing up our input emu
@@ -486,9 +509,14 @@ static DWORD XInputGetCapabilitiesHook(DWORD dwUserIndex, DWORD dwFlags, XINPUT_
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
 
+static int SSL_shutdownHook(void *ssl)
+{
+	return 1;
+}
+
 static InitFunction TaikoV0Func([]()
 {
-	uintptr_t imageBase = (uintptr_t)GetModuleHandleA(0);
+	uintptr_t imageBase = (uintptr_t)GetModuleHandleA(nullptr);
 	uintptr_t amBase = (uintptr_t)GetModuleHandleA("AMFrameWork.dll");
 
 	// Skip ExitWindowsEx (reboots pc when debugging)
@@ -497,6 +525,7 @@ static InitFunction TaikoV0Func([]()
 	// Path fixes
 	injector::WriteMemoryRaw(imageBase + 0x9D23C8, ".\\Setting2.bin", 15, true); // g:\\Setting2.bin
 	injector::WriteMemoryRaw(imageBase + 0x9D23B8, ".\\Setting1.bin", 15, true); // f:\\Setting1.bin
+	
 
 	injector::WriteMemory<BYTE>(amBase + 0x321A7, 0xEB, true); // ErrorLogPathA
 	injector::WriteMemory<BYTE>(amBase + 0x322FA, 0xEB, true); // ErrorLogPathB
@@ -547,66 +576,86 @@ static InitFunction TaikoV0Func([]()
 	MH_CreateHookApi(L"user32.dll", "CreateWindowExW", CreateWindowExWHook, (void**)&CreateWindowExWOri);
 	MH_CreateHookApi(L"user32.dll", "ShowCursor", ShowCursorHook, (void**)&ShowCursorOri);
 
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ClearSram", bnusio_ClearSram, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Close", bnusio_Close, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Communication", bnusio_Communication, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecCoin", bnusio_DecCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecService", bnusio_DecService, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetAnalogIn", bnusio_GetAnalogIn, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetBuffer", bnusio_GetBuffer, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCDOut", bnusio_GetCDOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoin", bnusio_GetCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinError", bnusio_GetCoinError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinLock", bnusio_GetCoinLock, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetEncoder", bnusio_GetEncoder, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetExpansionMode", bnusio_GetExpansionMode, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetFirmwareVersion", bnusio_GetFirmwareVersion, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetGout", bnusio_GetGout, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetHopOut", bnusio_GetHopOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetIoBoardName", bnusio_GetIoBoardName, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU16", bnusio_GetRegisterU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU8", bnusio_GetRegisterU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetService", bnusio_GetService, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetServiceError", bnusio_GetServiceError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU16", bnusio_GetStatusU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU8", bnusio_GetStatusU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn", bnusio_GetSwIn, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn64", bnusio_GetSwIn64, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSystemError", bnusio_GetSystemError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsConnected", bnusio_IsConnected, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsWideUsio", bnusio_IsWideUsio, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Open", bnusio_Open, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetCoin", bnusio_ResetCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetIoBoard", bnusio_ResetIoBoard, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetBuffer", bnusio_SetBuffer, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCDOut", bnusio_SetCDOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCoinLock", bnusio_SetCoinLock, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetExpansionMode", bnusio_SetExpansionMode, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetGout", bnusio_SetGout, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopOut", bnusio_SetHopOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperLimit", bnusio_SetHopperLimit, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperRequest", bnusio_SetHopperRequest, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetPLCounter", bnusio_SetPLCounter, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU16", bnusio_SetRegisterU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU8", bnusio_SetRegisterU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetSystemError", bnusio_SetSystemError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramRead", bnusio_SramRead, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramWrite", bnusio_SramWrite, NULL);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ClearSram", bnusio_ClearSram, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Close", bnusio_Close, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Communication", bnusio_Communication, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecCoin", bnusio_DecCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecService", bnusio_DecService, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetAnalogIn", bnusio_GetAnalogIn, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetBuffer", bnusio_GetBuffer, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCDOut", bnusio_GetCDOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoin", bnusio_GetCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinError", bnusio_GetCoinError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinLock", bnusio_GetCoinLock, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetEncoder", bnusio_GetEncoder, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetExpansionMode", bnusio_GetExpansionMode, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetFirmwareVersion", bnusio_GetFirmwareVersion, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetGout", bnusio_GetGout, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetHopOut", bnusio_GetHopOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetIoBoardName", bnusio_GetIoBoardName, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU16", bnusio_GetRegisterU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU8", bnusio_GetRegisterU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetService", bnusio_GetService, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetServiceError", bnusio_GetServiceError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU16", bnusio_GetStatusU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU8", bnusio_GetStatusU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn", bnusio_GetSwIn, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn64", bnusio_GetSwIn64, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSystemError", bnusio_GetSystemError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsConnected", bnusio_IsConnected, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsWideUsio", bnusio_IsWideUsio, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Open", bnusio_Open, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetCoin", bnusio_ResetCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetIoBoard", bnusio_ResetIoBoard, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetBuffer", bnusio_SetBuffer, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCDOut", bnusio_SetCDOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCoinLock", bnusio_SetCoinLock, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetExpansionMode", bnusio_SetExpansionMode, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetGout", bnusio_SetGout, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopOut", bnusio_SetHopOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperLimit", bnusio_SetHopperLimit, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperRequest", bnusio_SetHopperRequest, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetPLCounter", bnusio_SetPLCounter, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU16", bnusio_SetRegisterU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU8", bnusio_SetRegisterU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetSystemError", bnusio_SetSystemError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramRead", bnusio_SramRead, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramWrite", bnusio_SramWrite, nullptr);
 
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderInitialize", nbamUsbFinderInitialize, NULL);
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderRelease", nbamUsbFinderRelease, NULL);
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderGetSerialNumber", nbamUsbFinderGetSerialNumber, NULL);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderInitialize", nbamUsbFinderInitialize, nullptr);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderRelease", nbamUsbFinderRelease, nullptr);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderGetSerialNumber", nbamUsbFinderGetSerialNumber, nullptr);
 
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetState", XInputGetStateHook, NULL);
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputSetState", XInputSetStateHook, NULL);
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetCapabilities", XInputGetCapabilitiesHook, NULL);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetState", XInputGetStateHook, nullptr);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputSetState", XInputSetStateHook, nullptr);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetCapabilities", XInputGetCapabilitiesHook, nullptr);
 
-	MH_EnableHook(MH_ALL_HOOKS);
+	MH_EnableHook(nullptr);
 }, GameID::TaikoV0);
+
+typedef  uint8_t  (__fastcall *qrVtable1) (uint64_t a1);
+qrVtable1 originalqrVtable1 = nullptr;
+uintptr_t whereqrVtable1 = NULL;
+uint8_t __fastcall implOfqrVtable1 (uint64_t a1) { return 1; }
+
+
+typedef uint8_t (__fastcall *qrReadFromCOM1) (uint64_t a1);
+qrReadFromCOM1 originalqrReadFromCOM1 = nullptr;
+uintptr_t whereqrReadFromCOM1 = NULL;
+uint8_t __fastcall implOfqrReadFromCOM1 (uint64_t a1) {
+	*(uint32_t *)(a1 + 40) = 1;
+	*(uint32_t *)(a1 + 16) = 1;
+	return 1;
+}
+
+static constexpr uintptr_t baseAddress = 0x00007FF7DE5C0000;
+
+static constexpr uintptr_t addresses[] =
+	{0x00007FF7DE6AE0A4, 0x00007FF7DE6AE8B5, 0x00007FF7DE6AEDA6, 0x00007FF7DE7E5FB6, 0x00007FF7DE7E6063, 0x00007FF7DE7E609F, 0x00007FF7DE7E6146, 0x00007FF7DE7E6296, 0x00007FF7DE8B39E6, 0x00007FF7DE8B3AB0, 0x00007FF7DE8B3BE4, 0x00007FF7DE8B3CB3, 0x00007FF7DE8C643B, 0x00007FF7DE8C6507, 0x00007FF7DE8C65D3, 0x00007FF7DE8C66FB, 0x00007FF7DE8C67C7, 0x00007FF7DE8C6893, 0x00007FF7DE8C698B, 0x00007FF7DE8C6A2E, 0x00007FF7DE8D3666, 0x00007FF7DE8D3726, 0x00007FF7DE8D39F4, 0x00007FF7DE8D3B04, 0x00007FF7DE8D3C24, 0x00007FF7DE8D3CF4, 0x00007FF7DE8D4059, 0x00007FF7DE8D40C4, 0x00007FF7DE8D47AA, 0x00007FF7DE8D4DCC, 0x00007FF7DE8D4EC9, 0x00007FF7DE8D4F46, 0x00007FF7DE8D4F97, 0x00007FF7DE8D5608, 0x00007FF7DE8F8E2C, 0x00007FF7DE90A7EB};
 
 static InitFunction TaikoV8Func([]()
 {
-	uintptr_t imageBase = (uintptr_t)GetModuleHandleA(0);
+	uintptr_t imageBase = (uintptr_t)GetModuleHandleA(nullptr);
 	uintptr_t amBase = (uintptr_t)GetModuleHandleA("AMFrameWork.dll");
 
 	// Skip ExitWindowsEx (reboots pc when debugging)
@@ -616,6 +665,12 @@ static InitFunction TaikoV8Func([]()
 	injector::WriteMemoryRaw(imageBase + 0xB5C538, ".\\Setting2.bin", 15, true); // g:\\Setting2.bin
 	injector::WriteMemoryRaw(imageBase + 0xB5C528, ".\\Setting1.bin", 15, true); // f:\\Setting1.bin
 
+	for (const auto address : addresses)
+	{
+		const auto offset = address - baseAddress;
+		injector::WriteMemory<WORD>(imageBase + offset, 4000, true);
+	}
+	
 	injector::WriteMemory<BYTE>(amBase + 0x33EF7, 0xEB, true); // ErrorLogPathA
 	injector::WriteMemory<BYTE>(amBase + 0x3404A, 0xEB, true); // ErrorLogPathB
 	injector::WriteMemory<BYTE>(amBase + 0x34429, 0xEB, true); // CommonLogPathA
@@ -658,67 +713,75 @@ static InitFunction TaikoV8Func([]()
 	{
 		injector::WriteMemory<BYTE>(imageBase + 0x692E17, 0xEB, true); // 74 (JZ) -> EB (JMP)
 	}
-
 	// Hooks
 	MH_Initialize();
 
+	
+	 whereqrVtable1 = amBase + 0x1BA00;
+		MH_CreateHook (LPVOID(whereqrVtable1), LPVOID(implOfqrVtable1), reinterpret_cast<void**>(&originalqrVtable1));
+
+	whereqrReadFromCOM1 = amBase + 0x1BC20;
+	MH_CreateHook (LPVOID(whereqrReadFromCOM1), LPVOID(implOfqrReadFromCOM1), reinterpret_cast<void**>(&originalqrReadFromCOM1));
+	
 	MH_CreateHookApi(L"user32.dll", "CreateWindowExW", CreateWindowExWHook, (void**)&CreateWindowExWOri);
 	MH_CreateHookApi(L"user32.dll", "ShowCursor", ShowCursorHook, (void**)&ShowCursorOri);
 
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ClearSram", bnusio_ClearSram, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Close", bnusio_Close, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Communication", bnusio_Communication, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecCoin", bnusio_DecCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecService", bnusio_DecService, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetAnalogIn", bnusio_GetAnalogIn, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetBuffer", bnusio_GetBuffer, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCDOut", bnusio_GetCDOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoin", bnusio_GetCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinError", bnusio_GetCoinError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinLock", bnusio_GetCoinLock, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetEncoder", bnusio_GetEncoder, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetExpansionMode", bnusio_GetExpansionMode, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetFirmwareVersion", bnusio_GetFirmwareVersion, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetGout", bnusio_GetGout, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetHopOut", bnusio_GetHopOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetIoBoardName", bnusio_GetIoBoardName, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU16", bnusio_GetRegisterU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU8", bnusio_GetRegisterU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetService", bnusio_GetService, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetServiceError", bnusio_GetServiceError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU16", bnusio_GetStatusU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU8", bnusio_GetStatusU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn", bnusio_GetSwIn, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn64", bnusio_GetSwIn64, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSystemError", bnusio_GetSystemError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsConnected", bnusio_IsConnected, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsWideUsio", bnusio_IsWideUsio, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_Open", bnusio_Open, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetCoin", bnusio_ResetCoin, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetIoBoard", bnusio_ResetIoBoard, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetBuffer", bnusio_SetBuffer, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCDOut", bnusio_SetCDOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCoinLock", bnusio_SetCoinLock, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetExpansionMode", bnusio_SetExpansionMode, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetGout", bnusio_SetGout, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopOut", bnusio_SetHopOut, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperLimit", bnusio_SetHopperLimit, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperRequest", bnusio_SetHopperRequest, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetPLCounter", bnusio_SetPLCounter, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU16", bnusio_SetRegisterU16, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU8", bnusio_SetRegisterU8, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetSystemError", bnusio_SetSystemError, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramRead", bnusio_SramRead, NULL);
-	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramWrite", bnusio_SramWrite, NULL);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ClearSram", bnusio_ClearSram, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Close", bnusio_Close, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Communication", bnusio_Communication, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecCoin", bnusio_DecCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_DecService", bnusio_DecService, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetAnalogIn", bnusio_GetAnalogIn, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetBuffer", bnusio_GetBuffer, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCDOut", bnusio_GetCDOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoin", bnusio_GetCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinError", bnusio_GetCoinError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetCoinLock", bnusio_GetCoinLock, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetEncoder", bnusio_GetEncoder, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetExpansionMode", bnusio_GetExpansionMode, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetFirmwareVersion", bnusio_GetFirmwareVersion, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetGout", bnusio_GetGout, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetHopOut", bnusio_GetHopOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetIoBoardName", bnusio_GetIoBoardName, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU16", bnusio_GetRegisterU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetRegisterU8", bnusio_GetRegisterU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetService", bnusio_GetService, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetServiceError", bnusio_GetServiceError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU16", bnusio_GetStatusU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetStatusU8", bnusio_GetStatusU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn", bnusio_GetSwIn, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSwIn64", bnusio_GetSwIn64, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_GetSystemError", bnusio_GetSystemError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsConnected", bnusio_IsConnected, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_IsWideUsio", bnusio_IsWideUsio, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_Open", bnusio_Open, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetCoin", bnusio_ResetCoin, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_ResetIoBoard", bnusio_ResetIoBoard, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetBuffer", bnusio_SetBuffer, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCDOut", bnusio_SetCDOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetCoinLock", bnusio_SetCoinLock, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetExpansionMode", bnusio_SetExpansionMode, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetGout", bnusio_SetGout, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopOut", bnusio_SetHopOut, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperLimit", bnusio_SetHopperLimit, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetHopperRequest", bnusio_SetHopperRequest, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetPLCounter", bnusio_SetPLCounter, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU16", bnusio_SetRegisterU16, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetRegisterU8", bnusio_SetRegisterU8, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SetSystemError", bnusio_SetSystemError, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramRead", bnusio_SramRead, nullptr);
+	MH_CreateHookApi(L"bnusio.dll", "bnusio_SramWrite", bnusio_SramWrite, nullptr);
 
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderInitialize", nbamUsbFinderInitialize, NULL);
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderRelease", nbamUsbFinderRelease, NULL);
-	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderGetSerialNumber", nbamUsbFinderGetSerialNumber, NULL);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderInitialize", nbamUsbFinderInitialize, nullptr);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderRelease", nbamUsbFinderRelease, nullptr);
+	MH_CreateHookApi(L"nbamUsbFinder.dll", "nbamUsbFinderGetSerialNumber", nbamUsbFinderGetSerialNumber, nullptr);
 
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetState", XInputGetStateHook, NULL);
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputSetState", XInputSetStateHook, NULL);
-	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetCapabilities", XInputGetCapabilitiesHook, NULL);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetState", XInputGetStateHook, nullptr);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputSetState", XInputSetStateHook, nullptr);
+	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetCapabilities", XInputGetCapabilitiesHook, nullptr);
 
-	MH_EnableHook(MH_ALL_HOOKS);
+	MH_CreateHookApi(L"ssleay32.dll", "SSL_shutdown", SSL_shutdownHook, nullptr);
+
+	MH_EnableHook(nullptr);
 }, GameID::TaikoV8);
 #endif
