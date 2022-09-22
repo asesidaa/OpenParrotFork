@@ -508,9 +508,10 @@ static DWORD XInputGetCapabilitiesHook(DWORD dwUserIndex, DWORD dwFlags, XINPUT_
 	//info(true, "XInputGetCapabilitiesHook");
 	return ERROR_DEVICE_NOT_CONNECTED;
 }
-
+static int (*SSL_shutdownOriginal)(void* ssl);
 static int SSL_shutdownHook(void *ssl)
 {
+	SSL_shutdownOriginal(ssl);
 	return 1;
 }
 
@@ -665,11 +666,18 @@ static InitFunction TaikoV8Func([]()
 	injector::WriteMemoryRaw(imageBase + 0xB5C538, ".\\Setting2.bin", 15, true); // g:\\Setting2.bin
 	injector::WriteMemoryRaw(imageBase + 0xB5C528, ".\\Setting1.bin", 15, true); // f:\\Setting1.bin
 
-	for (const auto address : addresses)
+	// Unlock song limit
+	if (ToBool(config["General"]["UnlockSongLimit"]))
 	{
-		const auto offset = address - baseAddress;
-		injector::WriteMemory<WORD>(imageBase + offset, 4000, true);
+		for (const auto address : addresses)
+		{
+			const auto offset = address - baseAddress;
+			injector::WriteMemory<WORD>(imageBase + offset, 4000, true);
+		}
 	}
+
+	// Use TLS 1.2
+	injector::WriteMemory<BYTE>(imageBase + 0x44B1A9, 0x10, true);
 	
 	injector::WriteMemory<BYTE>(amBase + 0x33EF7, 0xEB, true); // ErrorLogPathA
 	injector::WriteMemory<BYTE>(amBase + 0x3404A, 0xEB, true); // ErrorLogPathB
@@ -780,7 +788,7 @@ static InitFunction TaikoV8Func([]()
 	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputSetState", XInputSetStateHook, nullptr);
 	MH_CreateHookApi(L"xinput9_1_0.dll", "XInputGetCapabilities", XInputGetCapabilitiesHook, nullptr);
 
-	MH_CreateHookApi(L"ssleay32.dll", "SSL_shutdown", SSL_shutdownHook, nullptr);
+	MH_CreateHookApi(L"ssleay32.dll", "SSL_shutdown", SSL_shutdownHook, reinterpret_cast<void**>(&SSL_shutdownOriginal));
 
 	MH_EnableHook(nullptr);
 }, GameID::TaikoV8);
