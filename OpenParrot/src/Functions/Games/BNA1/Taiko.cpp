@@ -654,7 +654,8 @@ static constexpr uintptr_t baseAddress = 0x00007FF7DE5C0000;
 static constexpr uintptr_t addresses[] =
 	{0x00007FF7DE6AE0A4, 0x00007FF7DE6AE8B5, 0x00007FF7DE6AEDA6, 0x00007FF7DE7E5FB6, 0x00007FF7DE7E6063, 0x00007FF7DE7E609F, 0x00007FF7DE7E6146, 0x00007FF7DE7E6296, 0x00007FF7DE8B39E6, 0x00007FF7DE8B3AB0, 0x00007FF7DE8B3BE4, 0x00007FF7DE8B3CB3, 0x00007FF7DE8C643B, 0x00007FF7DE8C6507, 0x00007FF7DE8C65D3, 0x00007FF7DE8C66FB, 0x00007FF7DE8C67C7, 0x00007FF7DE8C6893, 0x00007FF7DE8C698B, 0x00007FF7DE8C6A2E, 0x00007FF7DE8D3666, 0x00007FF7DE8D3726, 0x00007FF7DE8D39F4, 0x00007FF7DE8D3B04, 0x00007FF7DE8D3C24, 0x00007FF7DE8D3CF4, 0x00007FF7DE8D4059, 0x00007FF7DE8D40C4, 0x00007FF7DE8D47AA, 0x00007FF7DE8D4DCC, 0x00007FF7DE8D4EC9, 0x00007FF7DE8D4F46, 0x00007FF7DE8D4F97, 0x00007FF7DE8D5608, 0x00007FF7DE8F8E2C, 0x00007FF7DE90A7EB};
 
-static InitFunction TaikoV8Func([]()
+[[maybe_unused]]
+static InitFunction TaikoV8Func([]
 {
 	uintptr_t imageBase = (uintptr_t)GetModuleHandleA(nullptr);
 	uintptr_t amBase = (uintptr_t)GetModuleHandleA("AMFrameWork.dll");
@@ -662,10 +663,17 @@ static InitFunction TaikoV8Func([]()
 	// Skip ExitWindowsEx (reboots pc when debugging)
 	injector::MakeNOP(amBase + 0x35AB1, 10);
 
+	char settings1[] = ".\\Setting1.bin";
+	char settings2[] = ".\\Setting2.bin";
 	// Path fixes
-	injector::WriteMemoryRaw(imageBase + 0xB5C538, ".\\Setting2.bin", 15, true); // g:\\Setting2.bin
-	injector::WriteMemoryRaw(imageBase + 0xB5C528, ".\\Setting1.bin", 15, true); // f:\\Setting1.bin
+	injector::WriteMemoryRaw(imageBase + 0xB5C538, settings2, 15, true); // g:\\Setting2.bin
+	injector::WriteMemoryRaw(imageBase + 0xB5C528, settings1, 15, true); // f:\\Setting1.bin
 
+	char current_path[] = "./";
+	// Move F: cabinet files to current directory and fix string length
+	injector::WriteMemoryRaw(imageBase + 0xB1B4B0, current_path, 3, true); 
+	injector::WriteMemory<BYTE>(imageBase + 0x1C941, 0x02, true);
+	
 	// Unlock song limit
 	if (ToBool(config["General"]["UnlockSongLimit"]))
 	{
@@ -714,7 +722,8 @@ static InitFunction TaikoV8Func([]()
 
 	if (ToBool(config["General"]["UnlockAllSongs"]))
 	{
-		injector::WriteMemoryRaw(imageBase + 0x314E8D, "\xB0\x01", 2, true); // 32 C0 (XOR AL, AL) -> B0 01 (MOV AL, 1)
+		char unlock[] = "\xB0\x01";
+		injector::WriteMemoryRaw(imageBase + 0x314E8D, unlock, 2, true); // 32 C0 (XOR AL, AL) -> B0 01 (MOV AL, 1)
 	}
 
 	if (ToBool(config["General"]["SharedAudioMode"]))
@@ -725,8 +734,8 @@ static InitFunction TaikoV8Func([]()
 	MH_Initialize();
 
 	
-	 whereqrVtable1 = amBase + 0x1BA00;
-		MH_CreateHook (LPVOID(whereqrVtable1), LPVOID(implOfqrVtable1), reinterpret_cast<void**>(&originalqrVtable1));
+	whereqrVtable1 = amBase + 0x1BA00;
+	MH_CreateHook (LPVOID(whereqrVtable1), LPVOID(implOfqrVtable1), reinterpret_cast<void**>(&originalqrVtable1));
 
 	whereqrReadFromCOM1 = amBase + 0x1BC20;
 	MH_CreateHook (LPVOID(whereqrReadFromCOM1), LPVOID(implOfqrReadFromCOM1), reinterpret_cast<void**>(&originalqrReadFromCOM1));
