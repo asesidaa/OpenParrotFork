@@ -600,41 +600,44 @@ static constexpr uintptr_t baseAddress = 0x00007FF6A8560000;
 
 static constexpr uintptr_t addresses[] =
 {
-    0x00007FF6A88539E4,
-    0x00007FF6A8853AAE,
-    0x00007FF6A8853BE2,
-    0x00007FF6A8866438,
-    0x00007FF6A8866504,
-    0x00007FF6A88665D0,
-    0x00007FF6A88666F8,
-    0x00007FF6A88667C4,
-    0x00007FF6A8866890,
-    0x00007FF6A8866988,
-    0x00007FF6A8873664,
-    0x00007FF6A8873724,
-    0x00007FF6A88739F2,
-    0x00007FF6A8873B02,
-    0x00007FF6A8873C22,
-    0x00007FF6A8873CF2,
-    0x00007FF6A88740C2,
-    0x00007FF6A8785FB5,
-    0x00007FF6A8786145,
-    0x00007FF6A8874DCA,
-    0x00007FF6A8874EC7,
-    0x00007FF6A8898E2A,
-    0x00007FF6A864E0A2,
-    0x00007FF6A864E8B3,
-    0x00007FF6A864EDA4,
-    0x00007FF6A8875606,
-    0x00007FF6A88AA7E9,
-    0x00007FF6A8853CB1,
-    0x00007FF6A8874057,
-    0x00007FF6A8786060,
-    0x00007FF6A878609C,
-    0x00007FF6A8786293,
-    0x00007FF6A8866A2B,
-    0x00007FF6A8874F43,
-    0x00007FF6A8874F94
+    // 1599
+    0x00007FF6A88539E4 + 2,
+    0x00007FF6A8853AAE + 2,
+    0x00007FF6A8853BE2 + 2,
+    0x00007FF6A8866438 + 3,
+    0x00007FF6A8866504 + 3,
+    0x00007FF6A88665D0 + 3,
+    0x00007FF6A88666F8 + 3,
+    0x00007FF6A88667C4 + 3,
+    0x00007FF6A8866890 + 3,
+    0x00007FF6A8866988 + 3,
+    0x00007FF6A8873664 + 2,
+    0x00007FF6A8873724 + 2,
+    0x00007FF6A88739F2 + 2,
+    0x00007FF6A8873B02 + 2,
+    0x00007FF6A8873C22 + 2,
+    0x00007FF6A8873CF2 + 2,
+    0x00007FF6A88740C2 + 2,
+    0x00007FF6A88747A8 + 2,
+    // 1600
+    0x00007FF6A8785FB5 + 1,
+    0x00007FF6A8786145 + 1,
+    0x00007FF6A8874DCA + 2,
+    0x00007FF6A8874EC7 + 2,
+    0x00007FF6A8898E2A + 2,
+    0x00007FF6A864E0A2 + 2,
+    0x00007FF6A864E8B3 + 2,
+    0x00007FF6A864EDA4 + 2,
+    0x00007FF6A8875606 + 2,
+    0x00007FF6A88AA7E9 + 2,
+    0x00007FF6A8853CB1 + 2,
+    0x00007FF6A8874057 + 2,
+    0x00007FF6A8786060 + 3,
+    0x00007FF6A878609C + 3,
+    0x00007FF6A8786293 + 3,
+    0x00007FF6A8866A2B + 3,
+    0x00007FF6A8874F43 + 3,
+    0x00007FF6A8874F94 + 3
 };
 constexpr int song_data_size = 1024 * 1024 * 64;
 static char* song_data = new char[song_data_size]{ };
@@ -643,7 +646,6 @@ static void* set_crown_data_stub(uintptr_t jump_back_address, int value) {
     using namespace asmjit::x86;
     return utils::hook::assemble([jump_back_address, value](utils::hook::assembler& a)
     {
-        // Replace a1+8*x+8608 to our memory
         const auto exit = a.newLabel();
         a.mov(rdx, song_data);
         a.mov(rax, ptr(rsp, 0x40));
@@ -652,7 +654,7 @@ static void* set_crown_data_stub(uintptr_t jump_back_address, int value) {
         a.cmp(dword_ptr(rdx, rcx, 3, 0x300), value);
         a.jge(exit);
         a.mov(dword_ptr(rdx, rcx, 3, 0x300), value);
-        
+
         a.bind(exit);
         a.jmp(jump_back_address);
     });
@@ -667,24 +669,58 @@ static void* set_score_rank_stub(uintptr_t jump_back_address, int value) {
         a.add(rcx, rsi);
         a.add(rcx, rbx);
         a.lea(rax, ptr(rcx, rcx, 3));
-        a.cmp(dword_ptr(rdx, rax, 3), 3);
+        a.cmp(dword_ptr(rdx, rax, 3), value);
         a.jge(exit);
-        a.mov(dword_ptr(rdx, rax, 3), 3);
-        
+        a.mov(dword_ptr(rdx, rax, 3), value);
+
         a.bind(exit);
         a.jmp(jump_back_address);
     });
 }
 
-static void* set_unknown_data_stub(uintptr_t jump_back_address) {
+static void* set_unknown_data_stub(uintptr_t jump_back_address,
+                                   const asmjit::x86::Gp& mov,
+                                   const asmjit::x86::Gp& lea1, const asmjit::x86::Gp& lea2,
+                                   const asmjit::x86::Gp& add1, const asmjit::x86::Gp& add2,
+                                   const asmjit::x86::Gp& lea2_1, const asmjit::x86::Gp& lea2_2) {
+    using namespace asmjit::x86;
+    return utils::hook::assemble(
+        [jump_back_address, &mov, &lea1, &lea2, &add1, &add2, &lea2_1, &lea2_2](utils::hook::assembler& a)
+        {
+            a.mov(mov, song_data);
+            a.lea(lea1, ptr(lea2, lea2, 2));
+            a.add(add1, add2);
+            a.lea(lea2_1, ptr(lea2_2, lea2_2, 3));
+
+            a.jmp(jump_back_address);
+        });
+}
+
+static void* set_unknown_data_stub_2(uintptr_t jump_back_address) {
     using namespace asmjit::x86;
     return utils::hook::assemble([jump_back_address](utils::hook::assembler& a)
     {
         a.mov(rdx, song_data);
-        a.lea(rcx, ptr(rsi, rsi, 2));
-        a.add(rcx, rdi);
+        a.lea(rcx, ptr(rdi, rdi, 2));
+        a.lea(rax, ptr(rbx, 0x0B));
+        a.add(rcx, rax);
         a.lea(rax, ptr(rcx, rcx, 3));
-        a.lea(r15, ptr(rdx, rax, 3));
+
+        a.jmp(jump_back_address);
+    });
+}
+
+static void* set_crown_related(uintptr_t jump_back_address) {
+    using namespace asmjit::x86;
+    return utils::hook::assemble([jump_back_address](utils::hook::assembler& a)
+    {
+        a.mov(r8, song_data);
+        a.lea(rdx, ptr(rdi, rdi, 2));
+        a.add(rdx, rbx);
+        a.lea(rax, ptr(rdx, rdx, 3));
+        a.mov(byte_ptr(r8, rax, 3, 0x31C), 1);
+
+        a.jmp(jump_back_address);
     });
 }
 
@@ -706,6 +742,8 @@ static void* get_song_data_stub(uintptr_t jump_back_address) {
 [[maybe_unused]]
 static InitFunction TaikoV8Func([]
 {
+    using namespace asmjit::x86;
+    
     uintptr_t imageBase = (uintptr_t)GetModuleHandleA(nullptr);
     uintptr_t amBase = (uintptr_t)GetModuleHandleA("AMFrameWork.dll");
 
@@ -731,8 +769,8 @@ static InitFunction TaikoV8Func([]
         for (const auto address : addresses)
         {
             // Plus 2 is address to immediate value
-            const auto offset = address - baseAddress + 2;
-            injector::WriteMemory<uint16_t>(imageBase + offset, 4000, true);
+            const auto offset = address - baseAddress;
+            injector::WriteMemory<DWORD>(imageBase + offset, 4000, true);
         }
 
         // Crowns
@@ -749,7 +787,38 @@ static InitFunction TaikoV8Func([]
         utils::hook::jump(0x3067DE + imageBase, set_score_rank_stub(imageBase + 0x306807, 5), true);
         utils::hook::jump(0x3068AA + imageBase, set_score_rank_stub(imageBase + 0x3068D3, 4), true);
         utils::hook::jump(0x3069A2 + imageBase, set_score_rank_stub(imageBase + 0x3069D0, 7), true);
+
+        // Generic
+        utils::hook::jump(0x313755 + imageBase,
+            set_unknown_data_stub(imageBase + 0x31376A, rdx,
+                rcx, rsi,
+                rcx, rdi,
+                rax,rcx
+                /*r15, rdx,rax*/), true);
+        utils::hook::jump(0x313A0B + imageBase,
+            set_unknown_data_stub(imageBase + 0x313A20, rdx,
+                rcx, rdi,
+                rcx, rbx,
+                rax,rcx
+                /*r8, rdx, rax*/), true);
+        utils::hook::jump(0x313B4C + imageBase,
+            set_unknown_data_stub(imageBase + 0x313B61, rdx,
+                rcx, rdi,
+                rcx, rbx,
+                rax, rcx), true);
+        utils::hook::jump(0x313C42 + imageBase,
+            set_unknown_data_stub(imageBase + 0x313C57, r8,
+            rdx, rdi,
+            rdx, rbx,
+            rdx, rdx), true);
+
+        // Generic type 2
+        utils::hook::jump(0x313D38 + imageBase, set_unknown_data_stub_2(imageBase + 0x313D51), true);
+
+        // Used in crown
+        utils::hook::jump(0x3140D7 + imageBase, set_crown_related(imageBase + 0x3140EC), true);
         
+        // Get data
         utils::hook::jump(0x31367B + imageBase, get_song_data_stub(imageBase + 0x31369A), true);
     }
 
