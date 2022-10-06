@@ -788,19 +788,17 @@ static InitFunction TaikoV8Func([]
         utils::hook::jump(0x3068AA + imageBase, set_score_rank_stub(imageBase + 0x3068D3, 4), true);
         utils::hook::jump(0x3069A2 + imageBase, set_score_rank_stub(imageBase + 0x3069D0, 7), true);
 
-        // Generic
+        // Generic (unknown)
         utils::hook::jump(0x313755 + imageBase,
             set_unknown_data_stub(imageBase + 0x31376A, rdx,
                 rcx, rsi,
                 rcx, rdi,
-                rax,rcx
-                /*r15, rdx,rax*/), true);
+                rax,rcx), true);
         utils::hook::jump(0x313A0B + imageBase,
             set_unknown_data_stub(imageBase + 0x313A20, rdx,
                 rcx, rdi,
                 rcx, rbx,
-                rax,rcx
-                /*r8, rdx, rax*/), true);
+                rax,rcx), true);
         utils::hook::jump(0x313B4C + imageBase,
             set_unknown_data_stub(imageBase + 0x313B61, rdx,
                 rcx, rdi,
